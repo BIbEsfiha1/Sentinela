@@ -145,6 +145,8 @@ class CloudSyncManager:
 async def setup_rclone_remote(cloud: CloudSettings) -> dict:
     """Launch rclone config for the provider."""
     import asyncio
+    import webbrowser
+    import re
 
     if not RCLONE_EXE.exists():
         return {"ok": False, "error": "rclone nao encontrado. Execute setup.bat."}
@@ -167,15 +169,69 @@ async def setup_rclone_remote(cloud: CloudSettings) -> dict:
             cloud.remote_name, provider_type,
         ]
 
-        def _run():
-            return subprocess.run(
-                cmd, capture_output=True, text=True, timeout=120,
+        def _interactive_run():
+            # Use Popen to read stdout/stderr in real-time
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Merge stderr into stdout
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+                # On Windows, we refrain from creating a new window but we need IO
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             )
 
-        result = await asyncio.to_thread(_run)
-        if result.returncode == 0:
-            return {"ok": True, "message": "Remoto configurado com sucesso!"}
-        else:
-            return {"ok": False, "error": result.stderr[:300]}
+            auth_url_found = False
+            output_lines = []
+            
+            # 3-minute timeout for user to authorize
+            timeout = 180
+            start_time = time.time()
+            final_retcode = None
+
+            while True:
+                # Check for timeout
+                if time.time() - start_time > timeout:
+                    process.terminate()
+                    return {"ok": False, "error": "Timeout aguardando autorizacao (3min)."}
+
+                # Check if process ended
+                retcode = process.poll()
+                if retcode is not None:
+                    final_retcode = retcode
+                    # Read any remaining output
+                    rest = process.stdout.read()
+                    if rest:
+                        output_lines.append(rest)
+                    break
+                
+                # Consume available output without blocking too much
+                line = process.stdout.readline()
+                if line:
+                    stripped = line.strip()
+                    output_lines.append(stripped)
+                    # logger.info(f"rclone: {stripped}")
+                    
+                    # Detect Auth URL
+                    if "http://127.0.0.1" in line and "/auth" in line and not auth_url_found:
+                        match = re.search(r'(http://127\.0\.0\.1:\d+/auth\?state=[\w-]+)', line)
+                        if match:
+                            url = match.group(1)
+                            logger.info(f"Opening Auth URL: {url}")
+                            try:
+                                webbrowser.open(url)
+                            except Exception as e:
+                                logger.error(f"Failed to open browser: {e}")
+                            auth_url_found = True
+
+            if final_retcode == 0:
+                return {"ok": True, "message": "Remoto configurado com sucesso!"}
+            else:
+                return {"ok": False, "error": "\n".join(output_lines[-10:])}
+
+        return await asyncio.to_thread(_interactive_run)
+
     except Exception as e:
+        logger.error(f"Rclone setup error: {e}")
         return {"ok": False, "error": str(e)}
