@@ -41,19 +41,26 @@ Sentinela operates on a modular microservices architecture, ensuring stability a
 ```mermaid
 graph TD
     subgraph "Local Network (Edge)"
-        CAM[IP Cameras\nRTSP/ONVIF]
+        CAM["IP Cameras
+(RTSP/ONVIF)"]
         
         subgraph "Sentinela Core"
-            API[FastAPI Backend\n(Orchestrator)]
-            MTX[MediaMTX Server\n(Streaming Engine)]
-            REC[Recording Engine\n(Ffmpeg/IO)]
-            SYNC[Cloud Sync Agent\n(Rclone Wrapper)]
+            API["FastAPI Backend
+(Orchestrator)"]
+            MTX["MediaMTX Server
+(Streaming Engine)"]
+            REC["Recording Engine
+(Ffmpeg/IO)"]
+            SYNC["Cloud Sync Agent
+(Rclone Wrapper)"]
         end
     end
 
     subgraph "Clients & Storage"
-        WEB[Web Dashboard\n(React/Jinja2)]
-        CLOUD[Cloud Storage\n(S3/Drive/Dropbox)]
+        WEB["Web Dashboard
+(React/Jinja2)"]
+        CLOUD["Cloud Storage
+(S3/Drive/Dropbox)"]
     end
 
     CAM -->|RTSP Stream| MTX
