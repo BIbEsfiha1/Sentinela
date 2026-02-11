@@ -7,7 +7,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![MediaMTX](https://img.shields.io/badge/MediaMTX-Core-orange?style=for-the-badge&logo=rss&logoColor=white)](https://github.com/bluenviron/mediamtx)
 [![License](https://img.shields.io/badge/license-MIT-purple?style=for-the-badge)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=for-the-badge&logo=linux)](https://github.com/YOUR_USERNAME/sentinela)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey?style=for-the-badge&logo=linux)](https://github.com/BIbEsfiha1/Sentinela)
 
 <p align="center">
   <b>Enterprise-Grade Security • Ultra-Low Latency • Cloud Sync • Zero Config</b>
@@ -19,7 +19,7 @@
 
 ---
 
-## � Overview
+## 📖 Overview
 
 **Sentinela** is not just another camera viewer; it is a **professional, self-hosted NVR (Network Video Recorder)** solution designed for performance, privacy, and extensibility. 
 
@@ -81,7 +81,7 @@ graph TD
 
 ---
 
-## � Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
 - **OS**: Windows 10/11 or modern Linux.
@@ -94,7 +94,7 @@ We provide a turnkey setup script that handles dependencies (ffmpeg, rclone, med
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/your-username/sentinela.git
+   git clone https://github.com/BIbEsfiha1/Sentinela.git
    cd sentinela
    ```
 
