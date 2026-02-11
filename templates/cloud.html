@@ -72,29 +72,29 @@
 
 {% block scripts %}
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    loadCloudSettings();
-    loadCloudStatus();
-    setInterval(loadCloudStatus, 15000);
-});
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCloudSettings();
+        loadCloudStatus();
+        setInterval(loadCloudStatus, 15000);
+    });
 
-async function loadCloudSettings() {
-    try {
-        const s = await api('/api/settings');
-        const c = s.cloud;
-        document.getElementById('cloudProvider').value = c.provider;
-        document.querySelector('[name=sync_interval_minutes]').value = c.sync_interval_minutes;
-        document.querySelector('[name=bandwidth_limit]').value = c.bandwidth_limit;
-        document.querySelector('[name=remote_path]').value = c.remote_path;
-        toggleCloudFields();
-    } catch (e) { /* ignore */ }
-}
+    async function loadCloudSettings() {
+        try {
+            const s = await api('/api/settings');
+            const c = s.cloud;
+            document.getElementById('cloudProvider').value = c.provider;
+            document.querySelector('[name=sync_interval_minutes]').value = c.sync_interval_minutes;
+            document.querySelector('[name=bandwidth_limit]').value = c.bandwidth_limit;
+            document.querySelector('[name=remote_path]').value = c.remote_path;
+            toggleCloudFields();
+        } catch (e) { /* ignore */ }
+    }
 
-async function loadCloudStatus() {
-    try {
-        const s = await api('/api/cloud/status');
-        const el = document.getElementById('cloudStatus');
-        el.innerHTML = `
+    async function loadCloudStatus() {
+        try {
+            const s = await api('/api/cloud/status');
+            const el = document.getElementById('cloudStatus');
+            el.innerHTML = `
             <div class="mb-1">
                 <strong>Status:</strong>
                 ${s.syncing
@@ -107,51 +107,128 @@ async function loadCloudStatus() {
             ${s.last_sync ? `<div class="mb-1"><strong>Ultima sync:</strong> ${s.last_sync}</div>` : ''}
             ${s.error ? `<div class="alert alert-danger mt-1">${s.error}</div>` : ''}
         `;
-    } catch (e) { /* ignore */ }
-}
-
-function toggleCloudFields() {
-    const provider = document.getElementById('cloudProvider').value;
-    document.getElementById('cloudFields').classList.toggle('hidden', provider === 'none');
-}
-
-async function saveCloud(e) {
-    e.preventDefault();
-    const form = e.target;
-    const provider = form.querySelector('[name=provider]').value;
-    try {
-        await api('/api/settings/cloud', 'PUT', {
-            provider: provider,
-            enabled: provider !== 'none',
-            sync_interval_minutes: parseInt(form.querySelector('[name=sync_interval_minutes]').value),
-            bandwidth_limit: form.querySelector('[name=bandwidth_limit]').value,
-            remote_name: 'sentinela',
-            remote_path: form.querySelector('[name=remote_path]').value,
-        });
-        showToast('Configuracoes salvas!', 'success');
-    } catch (e) {
-        showToast('Erro: ' + e.message, 'danger');
+        } catch (e) { /* ignore */ }
     }
-}
 
-async function setupCloud() {
-    showToast('Abrindo autorizacao no navegador...', 'info');
-    try {
-        const r = await api('/api/cloud/setup', 'POST');
-        showToast(r.ok ? 'Autorizado!' : r.error, r.ok ? 'success' : 'danger');
-    } catch (e) {
-        showToast('Erro: ' + e.message, 'danger');
+    function toggleCloudFields() {
+        const provider = document.getElementById('cloudProvider').value;
+        document.getElementById('cloudFields').classList.toggle('hidden', provider === 'none');
     }
-}
 
-async function manualSync() {
-    try {
-        await api('/api/cloud/sync', 'POST');
-        showToast('Sincronizacao iniciada!', 'info');
-        setTimeout(loadCloudStatus, 3000);
-    } catch (e) {
-        showToast('Erro: ' + e.message, 'danger');
+    async function saveCloud(e) {
+        e.preventDefault();
+        const form = e.target;
+        const provider = form.querySelector('[name=provider]').value;
+        try {
+            await api('/api/settings/cloud', 'PUT', {
+                provider: provider,
+                enabled: provider !== 'none',
+                sync_interval_minutes: parseInt(form.querySelector('[name=sync_interval_minutes]').value),
+                bandwidth_limit: form.querySelector('[name=bandwidth_limit]').value,
+                remote_name: 'sentinela',
+                remote_path: form.querySelector('[name=remote_path]').value,
+            });
+            showToast('Configuracoes salvas!', 'success');
+        } catch (e) {
+            showToast('Erro: ' + e.message, 'danger');
+        }
     }
-}
+
+    let setupPollInterval = null;
+    let authWindow = null;
+
+    async function setupCloud() {
+        // Cancel previous polling if any
+        if (setupPollInterval) clearInterval(setupPollInterval);
+
+        // 1. Auto-save settings first
+        const form = document.getElementById('cloudForm');
+        const provider = form.querySelector('[name=provider]').value;
+
+        if (provider === 'none') {
+            showToast('Selecione um provedor valido antes de autorizar.', 'warning');
+            return;
+        }
+
+        showToast('Salvando configuracoes...', 'info');
+
+        try {
+            // Save current form values
+            await api('/api/settings/cloud', 'PUT', {
+                provider: provider,
+                enabled: true, // Enable automatically if authorizing
+                sync_interval_minutes: parseInt(form.querySelector('[name=sync_interval_minutes]').value),
+                bandwidth_limit: form.querySelector('[name=bandwidth_limit]').value,
+                remote_name: 'sentinela',
+                remote_path: form.querySelector('[name=remote_path]').value,
+            });
+        } catch (e) {
+            showToast('Erro ao salvar configuracoes: ' + e.message, 'danger');
+            return;
+        }
+
+        // 2. Start Setup Process
+        showToast('Iniciando autorizacao...', 'info');
+
+        try {
+            const r = await api('/api/cloud/setup', 'POST');
+            if (!r.ok) throw new Error(r.error || 'Erro ao iniciar');
+
+            // Start polling
+            const btn = document.querySelector('button[onclick="setupCloud()"]');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = "Aguardando autorizacao...";
+
+            setupPollInterval = setInterval(async () => {
+                try {
+                    const status = await api('/api/cloud/setup/status');
+
+                    if (status.auth_url && !authWindow) {
+                        showToast('Por favor, autorize na janela que se abriu.', 'warning');
+                        authWindow = window.open(status.auth_url, '_blank');
+                        if (!authWindow) {
+                            showToast('Pop-up bloqueado! Clique <a href="' + status.auth_url + '" target="_blank" class="underline">AQUI</a> para autorizar.', 'danger');
+                        }
+                    }
+
+                    if (status.status === 'success') {
+                        cleanupSetup();
+                        showToast('Nuvem configurada com sucesso!', 'success');
+                        loadCloudStatus();
+                    } else if (status.status === 'error') {
+                        cleanupSetup();
+                        showToast('Erro: ' + status.error, 'danger');
+                    } else if (status.status === 'cancelled') {
+                        cleanupSetup();
+                        showToast('Cancelado pelo usuario.', 'info');
+                    }
+                } catch (e) {
+                    console.error("Poll error", e);
+                }
+            }, 2000);
+
+            function cleanupSetup() {
+                clearInterval(setupPollInterval);
+                setupPollInterval = null;
+                authWindow = null;
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+
+        } catch (e) {
+            showToast('Erro: ' + e.message, 'danger');
+        }
+    }
+
+    async function manualSync() {
+        try {
+            await api('/api/cloud/sync', 'POST');
+            showToast('Sincronizacao iniciada!', 'info');
+            setTimeout(loadCloudStatus, 3000);
+        } catch (e) {
+            showToast('Erro: ' + e.message, 'danger');
+        }
+    }
 </script>
 {% endblock %}

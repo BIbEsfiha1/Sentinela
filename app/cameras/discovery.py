@@ -8,6 +8,9 @@ from ..models import DiscoveredCamera
 
 logger = logging.getLogger(__name__)
 
+# Common camera ports
+CAMERA_PORTS = [554, 8554, 8899, 37777, 34567, 80, 8080]
+
 
 def get_local_subnet() -> Optional[str]:
     """Get local IP and derive /24 subnet."""
@@ -17,12 +20,26 @@ def get_local_subnet() -> Optional[str]:
         ip = s.getsockname()[0]
         s.close()
         parts = ip.split(".")
+        logger.info(f"Local IP: {ip}, scanning subnet {parts[0]}.{parts[1]}.{parts[2]}.0/24")
         return f"{parts[0]}.{parts[1]}.{parts[2]}"
+    except Exception as e:
+        logger.error(f"Failed to detect local subnet: {e}")
+        return None
+
+
+def get_local_ip() -> Optional[str]:
+    """Get local IP address."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
     except Exception:
         return None
 
 
-async def scan_port(ip: str, port: int, timeout: float = 1.0) -> bool:
+async def scan_port(ip: str, port: int, timeout: float = 0.5) -> bool:
     """Check if a port is open on the given IP."""
     try:
         _, writer = await asyncio.wait_for(
@@ -36,35 +53,83 @@ async def scan_port(ip: str, port: int, timeout: float = 1.0) -> bool:
         return False
 
 
-async def scan_subnet(subnet: str, ports: list[int] = None) -> list[DiscoveredCamera]:
-    """Scan /24 subnet for cameras on RTSP ports."""
-    if ports is None:
-        ports = [554, 8899]
-    found = []
-    tasks = []
+def guess_brand(open_ports: list[int]) -> str:
+    """Guess camera brand based on open ports."""
+    port_set = set(open_ports)
+    if 37777 in port_set or 34567 in port_set:
+        return "Intelbras/Dahua"
+    if 8899 in port_set:
+        return "Intelbras/HiSilicon"
+    if 554 in port_set and 80 in port_set:
+        return "ONVIF/Generica"
+    if 8554 in port_set:
+        return "MediaMTX/Generica"
+    return "Desconhecida"
 
+
+async def scan_subnet(subnet: str, ports: list[int] = None) -> list[DiscoveredCamera]:
+    """Scan /24 subnet for cameras on common ports."""
+    if ports is None:
+        ports = CAMERA_PORTS
+    
+    local_ip = get_local_ip()
+    found = []
+    ip_ports: dict[str, list[int]] = {}  # Track all open ports per IP
+
+    # Build all tasks
+    async def check(ip: str, port: int):
+        ok = await scan_port(ip, port)
+        return ip, port, ok
+
+    tasks = []
     for i in range(1, 255):
         ip = f"{subnet}.{i}"
+        if ip == local_ip:
+            continue  # Skip self
         for port in ports:
-            tasks.append((ip, port, scan_port(ip, port)))
+            tasks.append(check(ip, port))
 
-    # Run scans in batches to avoid overwhelming the network
-    batch_size = 50
-    for batch_start in range(0, len(tasks), batch_size):
-        batch = tasks[batch_start:batch_start + batch_size]
-        results = await asyncio.gather(
-            *[t[2] for t in batch],
-            return_exceptions=True,
-        )
-        for (ip, port, _), result in zip(batch, results):
-            if result is True:
-                # Check if already found this IP
-                if not any(c.ip == ip for c in found):
-                    found.append(DiscoveredCamera(
-                        ip=ip, port=port, source="scan",
-                        name=f"Camera {ip.split('.')[-1]}",
-                    ))
-                    logger.info(f"Found camera at {ip}:{port}")
+    logger.info(f"Starting subnet scan: {len(tasks)} checks on {subnet}.0/24")
+
+    # Run ALL tasks concurrently (faster)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for result in results:
+        if isinstance(result, Exception):
+            continue
+        ip, port, ok = result
+        if ok:
+            if ip not in ip_ports:
+                ip_ports[ip] = []
+            ip_ports[ip].append(port)
+
+    # Build camera list from found IPs
+    for ip, open_ports in ip_ports.items():
+        # Skip routers/gateways that only have port 80 open
+        if open_ports == [80] or open_ports == [8080]:
+            # Check if this is likely a router (x.x.x.1)
+            if ip.endswith(".1"):
+                continue
+        
+        # Pick the best RTSP port  
+        rtsp_port = 554
+        if 554 in open_ports:
+            rtsp_port = 554
+        elif 8554 in open_ports:
+            rtsp_port = 8554
+        elif 8899 in open_ports:
+            rtsp_port = 8899
+        elif open_ports:
+            rtsp_port = open_ports[0]
+
+        brand = guess_brand(open_ports)
+        name = f"{brand} ({ip.split('.')[-1]})"
+
+        found.append(DiscoveredCamera(
+            ip=ip, port=rtsp_port, source="scan",
+            name=name,
+        ))
+        logger.info(f"Found device at {ip} - ports: {open_ports} - brand: {brand}")
 
     return found
 
@@ -85,7 +150,6 @@ async def discover_onvif() -> list[DiscoveredCamera]:
             result = []
             for svc in services:
                 for xaddr in svc.getXAddrs():
-                    # Extract IP from URL like http://192.168.1.100:80/onvif/device_service
                     try:
                         from urllib.parse import urlparse
                         parsed = urlparse(xaddr)
@@ -100,7 +164,6 @@ async def discover_onvif() -> list[DiscoveredCamera]:
             wsd.stop()
             return result
 
-        # Run in executor to avoid blocking
         found = await asyncio.to_thread(_discover)
         # Deduplicate
         seen = set()
@@ -131,10 +194,11 @@ async def discover() -> list[DiscoveredCamera]:
             if cam.ip not in seen_ips:
                 seen_ips.add(cam.ip)
                 all_cameras.append(cam)
+                logger.info(f"ONVIF camera found: {cam.ip}")
     except Exception as e:
         logger.warning(f"ONVIF discovery failed: {e}")
 
-    # Fallback: port scan
+    # Port scan
     subnet = get_local_subnet()
     if subnet:
         try:
@@ -143,8 +207,15 @@ async def discover() -> list[DiscoveredCamera]:
                 if cam.ip not in seen_ips:
                     seen_ips.add(cam.ip)
                     all_cameras.append(cam)
+                else:
+                    # Update existing with scan info if ONVIF found it first
+                    for existing in all_cameras:
+                        if existing.ip == cam.ip and existing.source == "onvif":
+                            existing.name = cam.name  # Use the brand-detected name
         except Exception as e:
             logger.warning(f"Port scan failed: {e}")
+    else:
+        logger.error("Could not determine local subnet. No cameras can be discovered.")
 
     logger.info(f"Discovery complete: {len(all_cameras)} cameras found")
     return all_cameras

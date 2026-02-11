@@ -310,10 +310,34 @@ async def cloud_sync_status():
 
 @router.post("/cloud/setup")
 async def cloud_setup():
-    from ..cloud.sync import setup_rclone_remote
+    from ..server import get_app_state
+    state = get_app_state()
     config = load_config()
-    result = await setup_rclone_remote(config.cloud)
-    return result
+    
+    if state and state.get("cloud_sync"):
+        state["cloud_sync"].start_setup(config.cloud)
+        return {"ok": True, "message": "Iniciando configuracao..."}
+    
+    raise HTTPException(400, "Cloud sync manager not available")
+
+
+@router.get("/cloud/setup/status")
+async def cloud_setup_status():
+    from ..server import get_app_state
+    state = get_app_state()
+    if state and state.get("cloud_sync"):
+        return state["cloud_sync"].get_setup_status()
+    return {"status": "error", "error": "Manager not available"}
+
+
+@router.post("/cloud/setup/cancel")
+async def cloud_setup_cancel():
+    from ..server import get_app_state
+    state = get_app_state()
+    if state and state.get("cloud_sync"):
+        state["cloud_sync"].cancel_setup()
+        return {"ok": True}
+    return {"ok": False}
 
 
 # ─── Tunnel ───────────────────────────────────────────────────────────

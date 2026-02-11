@@ -26,6 +26,13 @@ class CloudSyncManager:
         self._last_sync: str | None = None
         self._last_error: str | None = None
         self._next_sync: float = 0
+        
+        # Setup state
+        self._setup_thread: threading.Thread | None = None
+        self._setup_status = "idle"  # idle, waiting_auth, success, error
+        self._setup_auth_url: str | None = None
+        self._setup_error: str | None = None
+        self._setup_process: subprocess.Popen | None = None
 
     def start(self):
         """Start periodic sync thread."""
@@ -137,9 +144,113 @@ class CloudSyncManager:
                 capture_output=True, text=True, timeout=10,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             )
-            return config.cloud.remote_name + ":" in result.stdout
         except Exception:
             return False
+
+    def start_setup(self, cloud: CloudSettings):
+        """Start the async setup process."""
+        if self._setup_thread and self._setup_thread.is_alive():
+            return
+        
+        self._setup_status = "starting"
+        self._setup_auth_url = None
+        self._setup_error = None
+        self._setup_thread = threading.Thread(target=self._run_setup, args=(cloud,), daemon=True)
+        self._setup_thread.start()
+
+    def get_setup_status(self) -> dict:
+        """Get current status of the setup process."""
+        return {
+            "status": self._setup_status,
+            "auth_url": self._setup_auth_url,
+            "error": self._setup_error
+        }
+    
+    def cancel_setup(self):
+        """Cancel any running setup."""
+        if self._setup_process:
+            self._setup_process.terminate()
+            self._setup_process = None
+        self._setup_status = "cancelled"
+
+
+    def _run_setup(self, cloud: CloudSettings):
+        """Background thread for rclone config."""
+        import asyncio
+        import re
+
+        if not RCLONE_EXE.exists():
+            self._setup_status = "error"
+            self._setup_error = "rclone nao encontrado"
+            return
+
+        provider_map = {
+            CloudProvider.GDRIVE: "drive",
+            CloudProvider.ONEDRIVE: "onedrive",
+            CloudProvider.DROPBOX: "dropbox",
+            CloudProvider.S3: "s3",
+        }
+
+        provider_type = provider_map.get(cloud.provider)
+        if not provider_type:
+             self._setup_status = "error"
+             self._setup_error = "Provedor nao suportado"
+             return
+
+        cmd = [
+            str(RCLONE_EXE), "config", "create",
+            cloud.remote_name, provider_type,
+        ]
+
+        try:
+            self._setup_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            )
+
+            timeout = 300 # 5 min
+            start_time = time.time()
+            
+            self._setup_status = "waiting_auth"
+
+            while True:
+                if time.time() - start_time > timeout:
+                    self._setup_process.terminate()
+                    self._setup_status = "error"
+                    self._setup_error = "Tempo limite excedido"
+                    return
+
+                retcode = self._setup_process.poll()
+                line = self._setup_process.stdout.readline()
+                
+                if line:
+                    logger.debug(f"Setup Rclone: {line.strip()}")
+                    # Detect Auth URL
+                    if "http://127.0.0.1" in line and "/auth" in line and not self._setup_auth_url:
+                        match = re.search(r'(http://127\.0\.0\.1:\d+/auth\?state=\S+)', line)
+                        if match:
+                            self._setup_auth_url = match.group(1)
+                            logger.info(f"Auth URL detected: {self._setup_auth_url}")
+
+                if retcode is not None and not line:
+                    break
+            
+            if retcode == 0:
+                self._setup_status = "success"
+            else:
+                self._setup_status = "error"
+                self._setup_error = "Falha no processo rclone"
+
+        except Exception as e:
+            self._setup_status = "error"
+            self._setup_error = str(e)
+        finally:
+            self._setup_process = None
 
 
 async def setup_rclone_remote(cloud: CloudSettings) -> dict:
@@ -215,10 +326,11 @@ async def setup_rclone_remote(cloud: CloudSettings) -> dict:
                     
                     # Detect Auth URL
                     if "http://127.0.0.1" in line and "/auth" in line and not auth_url_found:
-                        match = re.search(r'(http://127\.0\.0\.1:\d+/auth\?state=[\w-]+)', line)
+                        # Use \S+ to match any non-whitespace character for the state param
+                        match = re.search(r'(http://127\.0\.0\.1:\d+/auth\?state=\S+)', line)
                         if match:
                             url = match.group(1)
-                            logger.info(f"Opening Auth URL: {url}")
+                            logger.info(f"ACTION REQUIRED: Please visit this URL to authorize: {url}")
                             try:
                                 webbrowser.open(url)
                             except Exception as e:
