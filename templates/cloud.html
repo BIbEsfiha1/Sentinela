@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% set active_page = "cloud" %}
+{% block title %}Nuvem - Sentinela{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Sincronizacao com Nuvem</h1>
+</div>
+
+<div class="grid-2">
+    <!-- Config -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Configuracao</h3>
+        </div>
+        <form id="cloudForm" onsubmit="saveCloud(event)">
+            <div class="form-group">
+                <label class="form-label">Provedor</label>
+                <select class="form-select" id="cloudProvider" name="provider" onchange="toggleCloudFields()">
+                    <option value="none">Desabilitado</option>
+                    <option value="gdrive">Google Drive (15 GB gratis)</option>
+                    <option value="onedrive">OneDrive</option>
+                    <option value="dropbox">Dropbox</option>
+                    <option value="s3">Amazon S3</option>
+                </select>
+            </div>
+            <div id="cloudFields" class="hidden">
+                <div class="form-group">
+                    <label class="form-label">Intervalo de sincronizacao</label>
+                    <select class="form-select" name="sync_interval_minutes">
+                        <option value="30">A cada 30 minutos</option>
+                        <option value="60" selected>A cada 1 hora</option>
+                        <option value="120">A cada 2 horas</option>
+                        <option value="360">A cada 6 horas</option>
+                        <option value="720">A cada 12 horas</option>
+                        <option value="1440">Uma vez por dia</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Limite de velocidade</label>
+                    <select class="form-select" name="bandwidth_limit">
+                        <option value="1M">1 MB/s (conexao lenta)</option>
+                        <option value="5M" selected>5 MB/s (recomendado)</option>
+                        <option value="10M">10 MB/s (conexao rapida)</option>
+                        <option value="0">Sem limite</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Pasta remota</label>
+                    <input class="form-input" name="remote_path" value="Sentinela">
+                </div>
+                <button type="button" class="btn btn-secondary mb-2 w-full" onclick="setupCloud()">
+                    Autorizar Acesso ao Provedor
+                </button>
+            </div>
+            <button type="submit" class="btn btn-primary w-full">Salvar</button>
+        </form>
+    </div>
+
+    <!-- Status -->
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Status</h3>
+        </div>
+        <div id="cloudStatus">
+            <p class="text-muted">Carregando...</p>
+        </div>
+        <button class="btn btn-secondary w-full mt-2" onclick="manualSync()">Sincronizar Agora</button>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    loadCloudSettings();
+    loadCloudStatus();
+    setInterval(loadCloudStatus, 15000);
+});
+
+async function loadCloudSettings() {
+    try {
+        const s = await api('/api/settings');
+        const c = s.cloud;
+        document.getElementById('cloudProvider').value = c.provider;
+        document.querySelector('[name=sync_interval_minutes]').value = c.sync_interval_minutes;
+        document.querySelector('[name=bandwidth_limit]').value = c.bandwidth_limit;
+        document.querySelector('[name=remote_path]').value = c.remote_path;
+        toggleCloudFields();
+    } catch (e) { /* ignore */ }
+}
+
+async function loadCloudStatus() {
+    try {
+        const s = await api('/api/cloud/status');
+        const el = document.getElementById('cloudStatus');
+        el.innerHTML = `
+            <div class="mb-1">
+                <strong>Status:</strong>
+                ${s.syncing
+                    ? '<span class="text-warning">Sincronizando...</span>'
+                    : s.running
+                        ? '<span class="text-success">Ativo</span>'
+                        : '<span class="text-muted">Inativo</span>'
+                }
+            </div>
+            ${s.last_sync ? `<div class="mb-1"><strong>Ultima sync:</strong> ${s.last_sync}</div>` : ''}
+            ${s.error ? `<div class="alert alert-danger mt-1">${s.error}</div>` : ''}
+        `;
+    } catch (e) { /* ignore */ }
+}
+
+function toggleCloudFields() {
+    const provider = document.getElementById('cloudProvider').value;
+    document.getElementById('cloudFields').classList.toggle('hidden', provider === 'none');
+}
+
+async function saveCloud(e) {
+    e.preventDefault();
+    const form = e.target;
+    const provider = form.querySelector('[name=provider]').value;
+    try {
+        await api('/api/settings/cloud', 'PUT', {
+            provider: provider,
+            enabled: provider !== 'none',
+            sync_interval_minutes: parseInt(form.querySelector('[name=sync_interval_minutes]').value),
+            bandwidth_limit: form.querySelector('[name=bandwidth_limit]').value,
+            remote_name: 'sentinela',
+            remote_path: form.querySelector('[name=remote_path]').value,
+        });
+        showToast('Configuracoes salvas!', 'success');
+    } catch (e) {
+        showToast('Erro: ' + e.message, 'danger');
+    }
+}
+
+async function setupCloud() {
+    showToast('Abrindo autorizacao no navegador...', 'info');
+    try {
+        const r = await api('/api/cloud/setup', 'POST');
+        showToast(r.ok ? 'Autorizado!' : r.error, r.ok ? 'success' : 'danger');
+    } catch (e) {
+        showToast('Erro: ' + e.message, 'danger');
+    }
+}
+
+async function manualSync() {
+    try {
+        await api('/api/cloud/sync', 'POST');
+        showToast('Sincronizacao iniciada!', 'info');
+        setTimeout(loadCloudStatus, 3000);
+    } catch (e) {
+        showToast('Erro: ' + e.message, 'danger');
+    }
+}
+</script>
+{% endblock %}

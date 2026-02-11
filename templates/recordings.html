@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% set active_page = "recordings" %}
+{% block title %}Gravacoes - Sentinela{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Gravacoes</h1>
+    <div class="flex gap-1 items-center">
+        <select class="form-select" id="dateSelect" onchange="loadDate()" style="width:auto">
+            <option value="">Selecione a data</option>
+        </select>
+        <select class="form-select" id="cameraSelect" onchange="loadFiles()" style="width:auto;display:none">
+            <option value="">Todas as cameras</option>
+        </select>
+    </div>
+</div>
+
+<!-- Player -->
+<div class="player-container hidden" id="playerContainer">
+    <video id="videoPlayer" controls></video>
+    <div class="card-header" style="padding:0.75rem 1rem">
+        <span id="playerTitle" class="card-title">-</span>
+        <a id="downloadLink" class="btn btn-sm btn-secondary" download>Baixar</a>
+    </div>
+</div>
+
+<!-- File list -->
+<div id="fileList">
+    <div class="empty-state">
+        <h3>Selecione uma data acima</h3>
+        <p>As gravacoes sao organizadas por dia e camera.</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/recordings.js"></script>
+{% endblock %}

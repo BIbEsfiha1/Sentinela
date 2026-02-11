@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 68" fill="none">
+  <rect width="120" height="68" fill="#1a1d27"/>
+  <circle cx="60" cy="28" r="12" stroke="#4a4e63" stroke-width="2" fill="none"/>
+  <circle cx="60" cy="28" r="4" fill="#4a4e63"/>
+  <line x1="48" y1="16" x2="72" y2="40" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="60" y="56" text-anchor="middle" fill="#4a4e63" font-family="sans-serif" font-size="9">Sem sinal</text>
+</svg>

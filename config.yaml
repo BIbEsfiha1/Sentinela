@@ -1,0 +1,26 @@
+system:
+  web_port: 8080
+  mediamtx_api_port: 9997
+  mediamtx_webrtc_port: 8889
+  default_username: admin
+  default_password: '12345678'
+  auto_start: false
+  language: pt-BR
+  first_run: false
+recording:
+  segment_duration: 1800
+  retention_days: 7
+  recordings_path: recordings
+cloud:
+  provider: none
+  enabled: false
+  sync_interval_minutes: 60
+  bandwidth_limit: 5M
+  remote_name: sentinela
+  remote_path: Sentinela
+tunnel:
+  mode: disabled
+  public_url: null
+  hostname: null
+  tunnel_name: null
+cameras: []

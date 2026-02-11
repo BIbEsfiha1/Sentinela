@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "WebSearch",
+      "Bash(where:*)",
+      "Bash(pip show:*)",
+      "Bash(python:*)",
+      "Bash(findstr:*)",
+      "Bash(ffmpeg:*)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(pwsh.exe -Command:*)",
+      "Bash(del \"C:\\\\Users\\\\caram\\\\OneDrive\\\\Desktop\\\\Cameras\\\\nul\")"
+    ]
+  }
+}

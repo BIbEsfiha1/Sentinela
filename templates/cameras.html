@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% set active_page = "cameras" %}
+{% block title %}Cameras - Sentinela{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Cameras</h1>
+    <div class="flex gap-1">
+        <button class="btn btn-primary" onclick="openModal('discoverModal')">Descobrir na Rede</button>
+        <button class="btn btn-secondary" onclick="openModal('addModal')">Adicionar Manual</button>
+    </div>
+</div>
+
+<div id="cameraList">
+    <div class="loading-text"><div class="spinner"></div> Carregando cameras...</div>
+</div>
+
+<!-- Discover Modal -->
+<div class="modal-overlay" id="discoverModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Descobrir Cameras na Rede</h2>
+            <button class="modal-close" onclick="closeModal('discoverModal')">&times;</button>
+        </div>
+        <p class="text-muted mb-2">Procurando cameras automaticamente na sua rede local...</p>
+        <div id="discoverResults">
+            <button class="btn btn-primary w-full" onclick="startDiscovery()">Iniciar Busca</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Camera Modal -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Adicionar Camera</h2>
+            <button class="modal-close" onclick="closeModal('addModal')">&times;</button>
+        </div>
+        <form id="addForm" onsubmit="addCamera(event)">
+            <div class="form-group">
+                <label class="form-label">Nome</label>
+                <input class="form-input" name="name" required placeholder="Ex: Sala de Estar">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Endereco IP</label>
+                    <input class="form-input" name="ip" required placeholder="192.168.1.100">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Porta</label>
+                    <input class="form-input" name="port" type="number" value="554">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Usuario</label>
+                    <input class="form-input" name="username" value="admin">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Senha</label>
+                    <input class="form-input" name="password" type="password" value="12345678">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Canal</label>
+                    <input class="form-input" name="channel" type="number" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Stream</label>
+                    <select class="form-select" name="stream">
+                        <option value="0">Principal (alta qualidade)</option>
+                        <option value="1">Secundario (baixa qualidade)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="testBtn" onclick="testCamera()">Testar Conexao</button>
+                <button type="submit" class="btn btn-primary">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Camera Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Editar Camera</h2>
+            <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+        </div>
+        <form id="editForm" onsubmit="saveCamera(event)">
+            <input type="hidden" name="id" id="editId">
+            <div class="form-group">
+                <label class="form-label">Nome</label>
+                <input class="form-input" name="name" id="editName" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Endereco IP</label>
+                    <input class="form-input" name="ip" id="editIp" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Porta</label>
+                    <input class="form-input" name="port" id="editPort" type="number">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Usuario</label>
+                    <input class="form-input" name="username" id="editUser">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Senha</label>
+                    <input class="form-input" name="password" id="editPass" type="password">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-danger" onclick="deleteCamera()">Remover</button>
+                <button type="submit" class="btn btn-primary">Salvar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/discovery.js"></script>
+{% endblock %}

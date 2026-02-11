@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Bem-vindo - Sentinela{% endblock %}
+
+{% block content %}
+<div class="wizard-container">
+    <div class="wizard-steps-indicator">
+        <div class="step-dot active" id="dot1"></div>
+        <div class="step-dot" id="dot2"></div>
+        <div class="step-dot" id="dot3"></div>
+    </div>
+
+    <!-- Step 1: Welcome -->
+    <div class="wizard-step active" id="step1">
+        <div class="card text-center" style="padding:2.5rem">
+            <img src="/static/img/logo.svg" alt="Sentinela" style="width:80px;margin:0 auto 1.5rem">
+            <h1 style="margin-bottom:0.5rem">Bem-vindo ao Sentinela</h1>
+            <p class="text-muted" style="margin-bottom:2rem;font-size:1.1rem">
+                Sistema de monitoramento de cameras simples e automatizado.<br>
+                Vamos configurar tudo em poucos passos.
+            </p>
+            <button class="btn btn-primary btn-lg" onclick="wizardNext(2)">Comecar</button>
+        </div>
+    </div>
+
+    <!-- Step 2: Discovery -->
+    <div class="wizard-step" id="step2">
+        <div class="card">
+            <h2 style="margin-bottom:0.5rem">Encontrar Cameras</h2>
+            <p class="text-muted mb-2">
+                Vamos procurar cameras na sua rede automaticamente.
+                Certifique-se de que as cameras estao ligadas e conectadas ao Wi-Fi.
+            </p>
+
+            <div id="wizardDiscovery">
+                <button class="btn btn-primary btn-lg w-full" onclick="wizardDiscover()">
+                    Buscar Cameras na Rede
+                </button>
+            </div>
+
+            <div class="mt-2" style="display:flex;gap:0.75rem;justify-content:space-between">
+                <button class="btn btn-secondary" onclick="wizardNext(1)">Voltar</button>
+                <button class="btn btn-primary" onclick="wizardNext(3)">Continuar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: Done -->
+    <div class="wizard-step" id="step3">
+        <div class="card text-center" style="padding:2.5rem">
+            <div style="font-size:4rem;margin-bottom:1rem">&#10003;</div>
+            <h1 style="margin-bottom:0.5rem">Tudo Pronto!</h1>
+            <p class="text-muted" style="margin-bottom:1rem;font-size:1.1rem">
+                O Sentinela esta configurado e pronto para usar.
+            </p>
+            <div id="wizardSummary" class="mb-2"></div>
+            <p class="text-muted mb-2">
+                Voce pode ajustar mais opcoes em Configuracoes a qualquer momento.
+            </p>
+            <button class="btn btn-primary btn-lg" onclick="wizardFinish()">Ir para o Painel</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let wizardCameras = [];
+
+function wizardNext(step) {
+    document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.step-dot').forEach(d => d.classList.remove('active', 'done'));
+    document.getElementById('step' + step).classList.add('active');
+    for (let i = 1; i <= 3; i++) {
+        const dot = document.getElementById('dot' + i);
+        if (i < step) dot.classList.add('done');
+        if (i === step) dot.classList.add('active');
+    }
+
+    if (step === 3) {
+        loadWizardSummary();
+    }
+}
+
+async function wizardDiscover() {
+    const el = document.getElementById('wizardDiscovery');
+    el.innerHTML = '<div class="loading-text"><div class="spinner"></div> Procurando cameras... (ate 30 segundos)</div>';
+
+    try {
+        const cameras = await api('/api/discover', 'POST');
+        wizardCameras = cameras;
+
+        if (cameras.length === 0) {
+            el.innerHTML = `
+                <div class="alert alert-warning">Nenhuma camera encontrada.</div>
+                <p class="text-muted mb-1">Voce pode adicionar cameras manualmente depois em "Cameras".</p>
+                <button class="btn btn-secondary w-full" onclick="wizardDiscover()">Tentar Novamente</button>`;
+            return;
+        }
+
+        el.innerHTML = `
+            <div class="alert alert-success">${cameras.length} camera(s) encontrada(s)!</div>
+            ${cameras.map((c, i) => `
+                <div class="card mb-1" style="padding:0.75rem">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <strong>${c.name || c.ip}</strong>
+                            <span class="text-muted">${c.ip}</span>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="wizardAddCamera(${i}, this)">
+                            Adicionar
+                        </button>
+                    </div>
+                </div>
+            `).join('')}`;
+    } catch (e) {
+        el.innerHTML = `<div class="alert alert-danger">Erro: ${e.message}</div>
+            <button class="btn btn-secondary w-full mt-1" onclick="wizardDiscover()">Tentar Novamente</button>`;
+    }
+}
+
+async function wizardAddCamera(index, btn) {
+    const cam = wizardCameras[index];
+    btn.disabled = true;
+    btn.textContent = 'Adicionando...';
+    try {
+        await api('/api/cameras', 'POST', {
+            name: cam.name || `Camera ${cam.ip.split('.').pop()}`,
+            ip: cam.ip, port: cam.port,
+            username: 'admin', password: '12345678',
+            channel: 1, stream: 0,
+        });
+        btn.textContent = 'Adicionada!';
+        btn.className = 'btn btn-sm btn-success';
+    } catch (e) {
+        btn.textContent = 'Erro';
+        btn.disabled = false;
+    }
+}
+
+async function loadWizardSummary() {
+    try {
+        const cameras = await api('/api/cameras');
+        document.getElementById('wizardSummary').innerHTML = `
+            <p><strong>${cameras.length}</strong> camera(s) configurada(s)</p>
+            ${cameras.length > 0 ? '<p class="text-success">Gravacao iniciara automaticamente</p>' : ''}
+        `;
+    } catch (e) { /* ignore */ }
+}
+
+async function wizardFinish() {
+    try {
+        await api('/api/wizard/complete', 'POST');
+    } catch (e) { /* ignore */ }
+    window.location.href = '/';
+}
+</script>
+{% endblock %}

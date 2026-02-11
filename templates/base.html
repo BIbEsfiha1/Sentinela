@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Sentinela{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <img src="/static/img/logo.svg" alt="Sentinela" class="nav-logo">
+            <span class="nav-title">Sentinela</span>
+        </div>
+        <div class="nav-links" id="navLinks">
+            <a href="/" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">
+                <span class="nav-icon">&#9673;</span> Inicio
+            </a>
+            <a href="/cameras" class="nav-link {% if active_page == 'cameras' %}active{% endif %}">
+                <span class="nav-icon">&#9881;</span> Cameras
+            </a>
+            <a href="/recordings" class="nav-link {% if active_page == 'recordings' %}active{% endif %}">
+                <span class="nav-icon">&#9654;</span> Gravacoes
+            </a>
+            <a href="/cloud" class="nav-link {% if active_page == 'cloud' %}active{% endif %}">
+                <span class="nav-icon">&#9729;</span> Nuvem
+            </a>
+            <a href="/settings" class="nav-link {% if active_page == 'settings' %}active{% endif %}">
+                <span class="nav-icon">&#9881;</span> Configuracoes
+            </a>
+        </div>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu">&#9776;</button>
+    </nav>
+
+    <main class="content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <span>Sentinela v1.0</span>
+        <span id="statusBar">Carregando...</span>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

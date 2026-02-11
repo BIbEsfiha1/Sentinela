@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% set active_page = "dashboard" %}
+{% block title %}Inicio - Sentinela{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+        <div class="stat-value" id="statCameras">-</div>
+        <div class="stat-label">Cameras</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statRecording">-</div>
+        <div class="stat-label">Gravando</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statDisk">-</div>
+        <div class="stat-label">Disco Livre</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statRecSize">-</div>
+        <div class="stat-label">Gravacoes</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" id="statUptime">-</div>
+        <div class="stat-label">Tempo Ativo</div>
+    </div>
+    <div class="stat-card" id="tunnelStat" style="display:none">
+        <div class="stat-value text-success" style="font-size:0.9rem" id="statTunnel">-</div>
+        <div class="stat-label">Acesso Remoto</div>
+    </div>
+</div>
+
+<!-- Camera Grid -->
+<div class="page-header">
+    <h2 class="page-title">Cameras ao Vivo</h2>
+</div>
+
+<div class="camera-grid" id="cameraGrid">
+    <div class="loading-text"><div class="spinner"></div> Carregando cameras...</div>
+</div>
+
+<div class="empty-state hidden" id="noCameras">
+    <h3>Nenhuma camera configurada</h3>
+    <p class="mb-2">Adicione cameras para comecar a monitorar.</p>
+    <a href="/cameras" class="btn btn-primary btn-lg">Configurar Cameras</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/camera-grid.js"></script>
+{% endblock %}
