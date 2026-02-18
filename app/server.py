@@ -30,27 +30,31 @@ async def lifespan(app: FastAPI):
     (BASE_DIR / config.recording.recordings_path).mkdir(exist_ok=True)
     (BASE_DIR / "logs").mkdir(exist_ok=True)
 
-    # Start MediaMTX
+    # Start MediaMTX with ALL cameras configured upfront
     try:
         from .streaming.mediamtx import MediaMTXManager
         mediamtx = MediaMTXManager()
+        enabled_cameras = [cam for cam in config.cameras if cam.enabled]
+        mediamtx.set_cameras(enabled_cameras)
         mediamtx.start()
         _app_state["mediamtx"] = mediamtx
         logger.info("MediaMTX started.")
     except Exception as e:
         logger.warning(f"MediaMTX not available: {e}")
 
-    # Start recorder for enabled cameras
+    # Start recorder AFTER MediaMTX (so transcoded streams are available)
     try:
         from .recording.recorder import RecorderManager
         recorder = RecorderManager()
         _app_state["recorder"] = recorder
+
+        # Give transcoders a moment to start publishing
+        import time
+        time.sleep(3)
+
         for cam in config.cameras:
             if cam.enabled:
                 recorder.start_camera(cam)
-                # Register with MediaMTX
-                if "mediamtx" in _app_state:
-                    _app_state["mediamtx"].add_camera(cam)
         logger.info(f"Recorder started for {len([c for c in config.cameras if c.enabled])} cameras.")
     except Exception as e:
         logger.warning(f"Recorder not available: {e}")

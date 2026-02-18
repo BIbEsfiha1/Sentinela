@@ -37,15 +37,31 @@ class RecorderManager:
                 logger.info(f"Camera {camera.id} already recording.")
                 return
 
-        rtsp_url = build_rtsp_url_from_camera(camera)
+        # For H.265 cameras being transcoded, record from MediaMTX (already H.264)
+        needs_transcode = (
+            camera.codec == "h265"
+            or camera.brand in ("icsee", "xmeye")
+        )
+
+        if needs_transcode:
+            # Record the transcoded H.264 stream from MediaMTX
+            rtsp_url = f"rtsp://127.0.0.1:8554/{camera.id}"
+        else:
+            rtsp_url = build_rtsp_url_from_camera(camera)
+
         output_dir = self._get_output_path(camera.id)
         config = load_config()
         segment_time = config.recording.segment_duration
 
         output_pattern = str(output_dir / "rec_%H-%M-%S.mp4")
 
+        # Use local ffmpeg binary
+        ffmpeg_exe = str(BASE_DIR / "tools" / "ffmpeg" / "ffmpeg.exe")
+        if not Path(ffmpeg_exe).exists():
+            ffmpeg_exe = "ffmpeg"  # Fallback to PATH
+
         cmd = [
-            "ffmpeg",
+            ffmpeg_exe,
             "-hide_banner",
             "-loglevel", "warning",
             "-rtsp_transport", "tcp",

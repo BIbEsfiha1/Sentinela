@@ -1,0 +1,20 @@
+api: true
+apiAddress: :9997
+hls: true
+hlsAddress: :8888
+logDestinations:
+- stdout
+logLevel: warn
+paths:
+  all_others:
+    source: publisher
+  camera-1:
+    source: publisher
+  camera-2:
+    source: publisher
+  camera-3:
+    source: publisher
+rtsp: true
+rtspAddress: :8554
+webrtc: true
+webrtcAddress: :8889

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.log
+logs/
+recordings/
+rclone.conf
+rclone.conf.old*
+.env
+.venv
+venv/
+.idea/
+.vscode/
+*.swp
+*.swo

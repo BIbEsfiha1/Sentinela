@@ -63,11 +63,15 @@ class WatchdogManager:
             recorder.check_and_restart()
 
     def _check_mediamtx(self):
-        """Check MediaMTX is running."""
+        """Check MediaMTX and transcoders are running."""
         mediamtx = self._state.get("mediamtx")
-        if mediamtx and not mediamtx.is_running():
-            logger.warning("MediaMTX is down. Restarting...")
-            mediamtx.start()
+        if mediamtx:
+            if not mediamtx.is_running():
+                logger.warning("MediaMTX is down. Restarting...")
+                mediamtx.start()
+            else:
+                # Check individual transcoders
+                mediamtx.check_transcoders()
 
     def _check_tunnel(self):
         """Check tunnel is running if configured."""

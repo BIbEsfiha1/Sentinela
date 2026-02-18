@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <link rel="stylesheet" href="/static/css/style.css">
     {% block head %}{% endblock %}
 </head>
+
 <body>
     <nav class="navbar">
         <div class="nav-brand">
@@ -29,6 +31,9 @@
             <a href="/settings" class="nav-link {% if active_page == 'settings' %}active{% endif %}">
                 <span class="nav-icon">&#9881;</span> Configuracoes
             </a>
+            <a href="#" class="nav-link" onclick="openMobileModal()">
+                <span class="nav-icon">&#128241;</span> Celular
+            </a>
         </div>
         <button class="nav-toggle" id="navToggle" aria-label="Menu">&#9776;</button>
     </nav>
@@ -36,6 +41,34 @@
     <main class="content">
         {% block content %}{% endblock %}
     </main>
+
+    <!-- Mobile Access Modal -->
+    <div class="modal-overlay" id="mobileModal">
+        <div class="modal" style="text-align:center;max-width:320px">
+            <div class="modal-header">
+                <h2 class="modal-title">Use no Celular</h2>
+                <button class="modal-close" onclick="closeModal('mobileModal')">&times;</button>
+            </div>
+            <p class="text-muted text-sm" style="margin-bottom:10px">Aponte a camera do seu celular:</p>
+            <div style="background:white; padding:10px; display:inline-block; border-radius:8px">
+                <img id="mobileQrImg" src="" style="width:200px;height:200px;display:block">
+            </div>
+            <code id="mobileUrl"
+                style="display:block;margin-top:10px;font-size:0.9em;background:#222;padding:5px;border-radius:4px;word-break:break-all"></code>
+        </div>
+    </div>
+
+    <script>
+        function openMobileModal() {
+            let host = window.location.hostname;
+            const port = window.location.port || '80';
+            if (host === 'localhost' || host === '127.0.0.1') host = '192.168.15.6';
+            const url = `http://${host}:${port}`;
+            document.getElementById('mobileQrImg').src = `/api/tools/qr?text=${encodeURIComponent(url)}`;
+            document.getElementById('mobileUrl').textContent = url;
+            document.getElementById('mobileModal').classList.add('active');
+        }
+    </script>
 
     <footer class="footer">
         <span>Sentinela v1.0</span>
@@ -45,4 +78,5 @@
     <script src="/static/js/app.js"></script>
     {% block scripts %}{% endblock %}
 </body>
+
 </html>

@@ -18,9 +18,11 @@ class CameraModel(BaseModel):
     ip: str
     port: int = 554
     username: str = "admin"
-    password: str = "12345678"
+    password: str = ""
     channel: int = 1
     stream: int = 0  # 0=main, 1=sub
+    brand: str = "icsee"  # auto, intelbras, hikvision, icsee, generic, onvif
+    codec: str = "h265"  # auto, h264, h265
     enabled: bool = True
     status: CameraStatus = CameraStatus.OFFLINE
 
@@ -30,9 +32,11 @@ class CameraAdd(BaseModel):
     ip: str
     port: int = 554
     username: str = "admin"
-    password: str = "12345678"
+    password: str = ""
     channel: int = 1
     stream: int = 0
+    brand: str = "auto"
+    codec: str = "auto"
 
 
 class CameraUpdate(BaseModel):
@@ -43,6 +47,8 @@ class CameraUpdate(BaseModel):
     password: Optional[str] = None
     channel: Optional[int] = None
     stream: Optional[int] = None
+    brand: Optional[str] = None
+    codec: Optional[str] = None
     enabled: Optional[bool] = None
 
 

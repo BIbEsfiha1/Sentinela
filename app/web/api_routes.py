@@ -4,7 +4,7 @@ import os
 import time
 import logging
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response, Request
 from fastapi.responses import FileResponse
 from ..models import (
     CameraAdd, CameraUpdate, CameraModel, CameraStatus,
@@ -81,6 +81,17 @@ async def list_cameras():
 @router.post("/cameras")
 async def create_camera(data: CameraAdd):
     config = load_config()
+
+    # Check for duplicate IP
+    existing = [c for c in config.cameras if c.ip == data.ip]
+    if existing:
+        names = ", ".join(f'"{c.name}" ({c.id})' for c in existing)
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ja existe camera com IP {data.ip}: {names}. "
+                   f"Remova a existente ou use um IP diferente.",
+        )
+
     cam_id = next_camera_id(config)
     camera = CameraModel(id=cam_id, **data.model_dump())
     add_camera(config, camera)
@@ -160,14 +171,138 @@ async def discover_cameras():
 
 @router.post("/test-camera")
 async def test_camera(data: CameraAdd):
-    from ..cameras.rtsp import build_rtsp_url, test_rtsp
-    url = build_rtsp_url(data.ip, data.port, data.username, data.password, data.channel, data.stream)
-    ok = await test_rtsp(url)
-    return {"ok": ok, "url": url}
+    from ..cameras.rtsp import build_rtsp_url, test_rtsp, auto_detect_brand
+    
+    brand = getattr(data, "brand", "auto") or "auto"
+    
+    if brand == "auto":
+        # Try all known formats
+        result = await auto_detect_brand(
+            data.ip, data.port, data.username, data.password,
+            data.channel, data.stream,
+        )
+        if result:
+            return {"ok": True, "brand": result["brand"], "url": result["url"]}
+        else:
+            return {"ok": False, "brand": None, "error": "Nenhum formato RTSP funcionou. Verifique usuario/senha da camera."}
+    else:
+        url = build_rtsp_url(data.ip, data.port, data.username, data.password, data.channel, data.stream, brand=brand)
+        ok = await test_rtsp(url)
+        return {"ok": ok, "brand": brand, "url": url}
+
+
+@router.get("/tools/qr")
+async def generate_qr(text: str):
+    """Generate generic QR Code."""
+    import qrcode
+    from io import BytesIO
+    
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(text)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    
+    return Response(content=buf.getvalue(), media_type="image/png")
 
 
 # ─── Recordings ───────────────────────────────────────────────────────
+    return Response(content=buf.getvalue(), media_type="image/png")
 
+
+# ─── Bluetooth Tools ──────────────────────────────────────────────────
+
+@router.get("/tools/ble/scan")
+async def scan_ble_devices():
+    """Scan for BLE devices (specifically cameras)."""
+    try:
+        from bleak import BleakScanner
+        print("Starting BLE scan...")
+        devices = await BleakScanner.discover(timeout=4.0, return_adv=True)
+        
+        results = []
+        # Support Bleak < 0.19 and >= 0.19
+        iter_devices = devices.values() if isinstance(devices, dict) else devices
+        
+        for d, adv in iter_devices:
+            # Filter weak signals
+            if adv.rssi < -85: continue
+            
+            name = d.name or "Unknown"
+            is_camera = "XM" in name or "IPC" in name or "Robot" in name
+            
+            results.append({
+                "address": d.address,
+                "name": name,
+                "rssi": adv.rssi,
+                "is_likely_camera": is_camera
+            })
+            
+        # Sort by signal strength
+        results.sort(key=lambda x: x["rssi"], reverse=True)
+        return results
+    except ImportError:
+        return {"error": "Biblioteca 'bleak' nao instalada. Bluetooth nao disponivel."}
+    except Exception as e:
+        logger.error(f"BLE Scan error: {e}")
+        return {"error": str(e)}
+
+@router.post("/tools/ble/configure")
+async def configure_ble_device(address: str, ssid: str, password: str):
+    """Connect to BLE device and send Wi-Fi credentials."""
+    try:
+        from bleak import BleakClient
+        import json
+        import random
+        
+        print(f"Connecting to BLE {address}...")
+        async with BleakClient(address, timeout=15.0) as client:
+            # Find writable characteristic
+            write_char = None
+            
+            for service in client.services:
+                for char in service.characteristics:
+                    props = ",".join(char.properties).lower()
+                    if "write" in props:
+                        uuid_s = str(char.uuid).lower()
+                        # Prioritize XM/iCSee service (FFE1 or 2B11)
+                        if "ffe1" in uuid_s or "2b11" in uuid_s:
+                            write_char = char
+                            break
+                        # Fallback: any writable char if no specific one found yet
+                        if not write_char:
+                            write_char = char
+                if write_char and ("ffe1" in str(write_char.uuid).lower() or "2b11" in str(write_char.uuid).lower()):
+                    break
+            
+            if not write_char:
+                return {"ok": False, "error": "Nenhuma caracteristica de escrita encontrada no dispositivo."}
+                
+            # Prepare payload
+            payload = json.dumps({
+                "s": ssid,
+                "p": password,
+                "k": str(random.randint(100000, 999999)),
+                "t": "WPA"
+            })
+            
+            print(f"Sending BLE payload to {write_char.uuid}: {payload}")
+            await client.write_gatt_char(write_char, payload.encode('utf-8'), response=True)
+            
+            return {"ok": True, "message": "Configuracao enviada! Aguarde a camera conectar."}
+            
+    except Exception as e:
+        logger.error(f"BLE Config error: {e}")
+        return {"ok": False, "error": str(e)}
 @router.get("/recordings/dates")
 async def recording_dates():
     config = load_config()
@@ -376,3 +511,37 @@ async def tunnel_stop():
         state["tunnel"].stop()
         return {"ok": True}
     raise HTTPException(400, "Tunnel manager not available")
+
+
+# ─── WHEP Proxy (for tunnel/HTTPS access) ─────────────────────────────
+
+@router.post("/whep/{camera_id}")
+async def whep_proxy(camera_id: str, request: Request):
+    """Proxy WHEP requests to local MediaMTX for tunnel/HTTPS compatibility."""
+    import httpx
+
+    config = load_config()
+    whep_url = f"http://127.0.0.1:{config.system.mediamtx_webrtc_port}/{camera_id}/whep"
+
+    body = await request.body()
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                whep_url,
+                content=body,
+                headers={"Content-Type": "application/sdp"},
+                timeout=10.0,
+            )
+            return Response(
+                content=resp.content,
+                status_code=resp.status_code,
+                headers={
+                    "Content-Type": resp.headers.get("Content-Type", "application/sdp"),
+                    "Location": resp.headers.get("Location", ""),
+                },
+            )
+    except httpx.ConnectError:
+        raise HTTPException(502, "MediaMTX not reachable")
+    except httpx.TimeoutException:
+        raise HTTPException(504, "MediaMTX timeout")

@@ -8,19 +8,55 @@ system:
   language: pt-BR
   first_run: false
 recording:
-  segment_duration: 1800
+  segment_duration: 900
   retention_days: 7
   recordings_path: recordings
 cloud:
-  provider: none
-  enabled: false
+  provider: gdrive
+  enabled: true
   sync_interval_minutes: 60
   bandwidth_limit: 5M
   remote_name: sentinela
   remote_path: Sentinela
 tunnel:
-  mode: disabled
-  public_url: null
+  mode: quick
+  public_url: https://behavior-defines-lancaster-previously.trycloudflare.com
   hostname: null
   tunnel_name: null
-cameras: []
+cameras:
+- id: camera-1
+  name: Camera XM Sala
+  ip: 192.168.15.8
+  port: 554
+  username: admin
+  password: ''
+  channel: 0
+  stream: 0
+  brand: icsee
+  codec: h265
+  enabled: true
+  status: offline
+- id: camera-2
+  name: Camera XM (10)
+  ip: 192.168.15.10
+  port: 554
+  username: admin
+  password: ''
+  channel: 1
+  stream: 0
+  brand: icsee
+  codec: h265
+  enabled: true
+  status: offline
+- id: camera-3
+  name: Camera XM (11)
+  ip: 192.168.15.11
+  port: 554
+  username: admin
+  password: ''
+  channel: 0
+  stream: 0
+  brand: icsee
+  codec: h265
+  enabled: true
+  status: offline

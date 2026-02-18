@@ -8,11 +8,16 @@
     <div class="flex gap-1">
         <button class="btn btn-primary" onclick="openModal('discoverModal')">Descobrir na Rede</button>
         <button class="btn btn-secondary" onclick="openModal('addModal')">Adicionar Manual</button>
+        <button class="btn btn-secondary" onclick="openWifiModal()" title="Configurar Wi-Fi">
+            <span style="font-size:1.2em">📶</span> Configurar Wi-Fi
+        </button>
     </div>
 </div>
 
 <div id="cameraList">
-    <div class="loading-text"><div class="spinner"></div> Carregando cameras...</div>
+    <div class="loading-text">
+        <div class="spinner"></div> Carregando cameras...
+    </div>
 </div>
 
 <!-- Discover Modal -->
@@ -47,18 +52,37 @@
                     <input class="form-input" name="ip" required placeholder="192.168.1.100">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Porta</label>
+                    <label class="form-label">Porta RTSP</label>
                     <input class="form-input" name="port" type="number" value="554">
                 </div>
             </div>
+            <div class="form-group">
+                <label class="form-label">Marca / Formato RTSP</label>
+                <select class="form-select" name="brand">
+                    <option value="auto">Automatico (tenta detectar)</option>
+                    <option value="intelbras">Intelbras / Dahua</option>
+                    <option value="hikvision">Hikvision</option>
+                    <option value="icsee">iCSee / XMEye</option>
+                    <option value="onvif">ONVIF Generico</option>
+                    <option value="generic">Generico (rtsp://user:pass@ip/)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Codec de Video</label>
+                <select class="form-select" name="codec">
+                    <option value="auto">Auto</option>
+                    <option value="h264">H.264</option>
+                    <option value="h265">H.265 (transcodifica para browser)</option>
+                </select>
+            </div>
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Usuario</label>
+                    <label class="form-label">Usuario da Camera</label>
                     <input class="form-input" name="username" value="admin">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Senha</label>
-                    <input class="form-input" name="password" type="password" value="12345678">
+                    <label class="form-label">Senha da Camera</label>
+                    <input class="form-input" name="password" type="password" placeholder="Senha configurada na camera">
                 </div>
             </div>
             <div class="form-row">
@@ -74,8 +98,10 @@
                     </select>
                 </div>
             </div>
+            <div id="testResult" class="mb-1"></div>
             <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" id="testBtn" onclick="testCamera()">Testar Conexao</button>
+                <button type="button" class="btn btn-secondary" id="testBtn" onclick="testCamera()">Testar
+                    Conexao</button>
                 <button type="submit" class="btn btn-primary">Adicionar</button>
             </div>
         </form>
@@ -120,6 +146,75 @@
                 <button type="submit" class="btn btn-primary">Salvar</button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- Wi-Fi QR Modal -->
+<div class="modal-overlay" id="wifiModal">
+    <div class="modal" style="max-width:350px">
+        <div class="modal-header">
+            <h2 class="modal-title">Configurar Wi-Fi</h2>
+            <button class="modal-close" onclick="closeModal('wifiModal')">&times;</button>
+        </div>
+
+        <form onsubmit="generateWifiQr(event)" id="wifiStep1">
+            <p class="text-muted mb-2 text-sm">Conecte cameras novas ou resetadas.</p>
+            <div class="form-group">
+                <label class="form-label">Nome da Rede (2.4GHz)</label>
+                <input class="form-input" id="wifiSSID" required placeholder="Ex: MinhaCasa">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Senha do Wi-Fi</label>
+                <input class="form-input" id="wifiPass" type="password" required>
+                <div style="margin-top:5px;font-size:0.8rem">
+                    <label>
+                        <input type="checkbox"
+                            onchange="document.getElementById('wifiPass').type = this.checked ? 'text' : 'password'">
+                        Mostrar senha
+                    </label>
+                </div>
+                <div style="margin-top:10px;font-size:0.8rem">
+                    <label>
+                        <input type="checkbox" id="wifiAltFormat">
+                        <span title="Use este formato se a camera nao ler o codigo padrao">Formato alternativo
+                            (iCSee/XM)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-actions gap-1">
+                <button type="submit" class="btn btn-primary w-full">Gerar QR Code</button>
+            </div>
+            <div style="text-align:center; margin-top:10px">
+                <span class="text-muted text-sm" style="opacity:0.6">- OU -</span><br>
+                <button type="button" class="btn btn-secondary btn-sm mt-2" onclick="startBleScan()" style="width:100%">
+                    <span style="font-size:1.1em">⚡</span> Buscar via Bluetooth (iCSee)
+                </button>
+            </div>
+        </form>
+
+        <div id="wifiStep2" style="display:none; text-align:center">
+            <h3 class="mb-2 text-lg">Aponte a camera</h3>
+            <div style="background:white; padding:15px; display:inline-block; border-radius:8px; margin:10px 0">
+                <img id="qrImage" src="" style="width:200px;height:200px;display:block">
+            </div>
+            <p class="mt-2 text-muted text-sm">
+                1. Aumente o brilho.<br>
+                2. Segure a 15-20cm.<br>
+                3. Aguarde o bip "Connecting".
+            </p>
+            <button class="btn btn-secondary w-full mt-2" onclick="resetWifiModal()">Voltar</button>
+        </div>
+
+        <div id="wifiStep3" style="display:none">
+            <h3 class="mb-2 text-lg">Configurar via Bluetooth</h3>
+            <p class="text-muted text-sm mb-2">Selecione sua camera na lista:</p>
+            <div id="bleList"
+                style="height:150px; overflow-y:auto; background:#111; padding:5px; border-radius:4px; margin-bottom:10px; border:1px solid #333">
+                <div class="text-center text-muted p-2" style="font-size:0.9em">Clique em Buscar...</div>
+            </div>
+            <div id="bleStatus" class="text-xs text-muted mb-2">Bluetooth deve estar ligado no servidor.</div>
+            <button class="btn btn-secondary w-full" onclick="resetWifiModal()">Cancelar</button>
+        </div>
     </div>
 </div>
 {% endblock %}
